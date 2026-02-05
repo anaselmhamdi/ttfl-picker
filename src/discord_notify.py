@@ -1,6 +1,7 @@
 """Discord webhook notifications with rich embeds."""
 
 import os
+from datetime import datetime
 
 from discord_webhook import DiscordEmbed, DiscordWebhook
 
@@ -90,6 +91,7 @@ def _build_picks_embed(
     start_rank: int,
     end_rank: int,
     date: str,
+    earliest_game_time: datetime | None = None,
 ) -> DiscordEmbed | None:
     """Build embed for a range of picks using detailed format.
 
@@ -98,6 +100,7 @@ def _build_picks_embed(
         start_rank: Starting rank (1-indexed)
         end_rank: Ending rank (1-indexed, inclusive)
         date: Date string for the title
+        earliest_game_time: Earliest game time in Paris timezone (for first embed only)
 
     Returns:
         DiscordEmbed or None if no picks in range
@@ -119,7 +122,13 @@ def _build_picks_embed(
     color_index = (start_rank - 1) // 10
     color = colors[color_index] if color_index < len(colors) else "95a5a6"
 
-    embed = DiscordEmbed(title=title, color=color)
+    # Add deadline description for first embed only
+    description = None
+    if start_rank == 1 and earliest_game_time:
+        time_str = earliest_game_time.strftime("%Hh%M")
+        description = f"⏰ Picks close at **{time_str}** (Paris time)"
+
+    embed = DiscordEmbed(title=title, description=description, color=color)
 
     # Add each pick as a field
     for i, rec in enumerate(picks, start_rank):
@@ -136,6 +145,7 @@ def post_to_discord(
     recommendations: list[PlayerRecommendation],
     date: str,
     webhook_url: str | None = None,
+    earliest_game_time: datetime | None = None,
 ) -> bool:
     """Post recommendations to Discord with multiple messages.
 
@@ -150,6 +160,7 @@ def post_to_discord(
         recommendations: List of player recommendations
         date: Date string (YYYY-MM-DD)
         webhook_url: Optional webhook URL (defaults to DISCORD_WEBHOOK_URL env var)
+        earliest_game_time: Earliest game time in Paris timezone (shown in first embed)
 
     Returns:
         True if posting succeeded, False otherwise
@@ -172,7 +183,9 @@ def post_to_discord(
         if start > len(recommendations):
             break
 
-        embed = _build_picks_embed(recommendations, start, end, date)
+        # Pass earliest_game_time only for first embed
+        game_time = earliest_game_time if start == 1 else None
+        embed = _build_picks_embed(recommendations, start, end, date, game_time)
         if not embed:
             continue
 

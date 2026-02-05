@@ -2,6 +2,7 @@
 
 import time
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 from nba_api.stats.endpoints import (
@@ -13,6 +14,10 @@ from nba_api.stats.static import players, teams
 
 from . import get_current_season
 from .ttfl import calculate_ttfl_from_game_log
+
+# Timezone constants
+TZ_EST = ZoneInfo("America/New_York")
+TZ_PARIS = ZoneInfo("Europe/Paris")
 
 
 # Rate limiting - nba_api can be rate limited
@@ -43,14 +48,46 @@ def get_todays_games(date: str | None = None) -> list[dict]:
 
     games = []
     for _, row in games_df.iterrows():
-        games.append({
+        game_data = {
             "game_id": row["GAME_ID"],
             "home_team_id": row["HOME_TEAM_ID"],
             "away_team_id": row["VISITOR_TEAM_ID"],
             "game_status": row.get("GAME_STATUS_TEXT", ""),
-        })
+        }
+
+        # Parse game time from GAME_DATE_EST (format: "2025-02-05T19:00:00")
+        game_date_est = row.get("GAME_DATE_EST")
+        if game_date_est:
+            try:
+                # Parse as naive datetime, then localize to EST
+                game_dt = datetime.strptime(str(game_date_est), "%Y-%m-%dT%H:%M:%S")
+                game_data["game_time_utc"] = game_dt.replace(tzinfo=TZ_EST)
+            except (ValueError, TypeError):
+                game_data["game_time_utc"] = None
+        else:
+            game_data["game_time_utc"] = None
+
+        games.append(game_data)
 
     return games
+
+
+def get_earliest_game_time(games: list[dict]) -> datetime | None:
+    """
+    Get the earliest game time from today's games in Paris timezone.
+
+    Args:
+        games: List of games from get_todays_games()
+
+    Returns:
+        Earliest game time as datetime in Paris timezone, or None if no times available
+    """
+    times = [g["game_time_utc"] for g in games if g.get("game_time_utc")]
+    if not times:
+        return None
+
+    earliest_utc = min(times)
+    return earliest_utc.astimezone(TZ_PARIS)
 
 
 def get_team_abbrev(team_id: int) -> str:

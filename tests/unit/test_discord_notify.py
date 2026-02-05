@@ -1,5 +1,8 @@
 """Tests for Discord notification functions."""
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import pytest
 
 from src.discord_notify import (
@@ -204,3 +207,30 @@ class TestBuildPicksEmbed:
         embed1 = _build_picks_embed(sample_recommendations, 1, 10, "2025-02-04")
         embed2 = _build_picks_embed(sample_recommendations, 11, 20, "2025-02-04")
         assert embed1.color != embed2.color
+
+    def test_first_embed_with_game_time(self, sample_recommendations):
+        """Test first embed shows deadline when game time is provided."""
+        # 7pm EST = 1am Paris next day
+        game_time = datetime(2025, 2, 5, 1, 0, 0, tzinfo=ZoneInfo("Europe/Paris"))
+        embed = _build_picks_embed(
+            sample_recommendations, 1, 10, "2025-02-04", earliest_game_time=game_time
+        )
+        assert embed is not None
+        assert "01h00" in embed.description
+        assert "Paris time" in embed.description
+
+    def test_first_embed_no_game_time(self, sample_recommendations):
+        """Test first embed without game time has no description."""
+        embed = _build_picks_embed(sample_recommendations, 1, 10, "2025-02-04")
+        assert embed is not None
+        assert embed.description is None
+
+    def test_second_embed_no_game_time(self, sample_recommendations):
+        """Test second embed never shows game time."""
+        game_time = datetime(2025, 2, 5, 1, 0, 0, tzinfo=ZoneInfo("Europe/Paris"))
+        embed = _build_picks_embed(
+            sample_recommendations, 11, 20, "2025-02-04", earliest_game_time=game_time
+        )
+        assert embed is not None
+        # Second embed should not have the description even if game_time is passed
+        assert embed.description is None

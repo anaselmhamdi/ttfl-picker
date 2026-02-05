@@ -9,6 +9,7 @@ import click
 from dotenv import load_dotenv
 
 from src.discord_notify import post_to_discord
+from src.nba_data import get_earliest_game_time
 from src.picker import format_recommendations
 from src.session import TTFLSession, format_plan
 
@@ -107,7 +108,11 @@ def main(date, top, show_risky, show_locked, ignore_locks, cookies, output, verb
         if discord:
             load_dotenv()
             try:
-                success = post_to_discord(recommendations, display_date)
+                # Get earliest game time for deadline display
+                _, games = session.get_players_for_date(date)
+                earliest_game_time = get_earliest_game_time(games)
+
+                success = post_to_discord(recommendations, display_date, earliest_game_time=earliest_game_time)
                 if success:
                     click.echo("\nPosted to Discord successfully!")
                 else:
