@@ -7,12 +7,15 @@ from bs4 import BeautifulSoup
 # DNP risk probabilities by injury status
 DNP_RISK = {
     "out": 1.0,
+    "out for the season": 1.0,
+    "out indefinitely": 1.0,
     "doubtful": 0.75,
     "questionable": 0.40,
     "probable": 0.10,
     "available": 0.0,
     "day-to-day": 0.30,
     "gtd": 0.30,  # Game-time decision
+    "game time decision": 0.30,
 }
 
 
@@ -94,21 +97,15 @@ def parse_espn_injuries(html: str) -> dict[str, str]:
         rows = table.find_all("tr")
         for row in rows:
             cells = row.find_all("td")
-            if len(cells) >= 2:
-                # First cell usually has player name, second has status
+            # ESPN columns: NAME | POS | EST. RETURN DATE | STATUS | COMMENT
+            if len(cells) >= 4:
                 player_cell = cells[0]
-                status_cell = cells[1] if len(cells) > 1 else None
+                status_cell = cells[3]  # STATUS is in column index 3
 
                 player_name = player_cell.get_text(strip=True)
                 status = status_cell.get_text(strip=True) if status_cell else None
 
                 if player_name and status:
-                    # Clean up player name (remove position, etc.)
-                    # ESPN format: "Player Name POS"
-                    parts = player_name.rsplit(" ", 1)
-                    if len(parts) > 1 and len(parts[-1]) <= 3:
-                        player_name = parts[0]
-
                     injuries[player_name] = status
 
     return injuries
@@ -145,9 +142,10 @@ def parse_cbssports_injuries(html: str) -> dict[str, str]:
 
     for row in injury_rows:
         cells = row.find_all("td")
-        if len(cells) >= 3:
+        # CBS columns: NAME | POS | DATE | INJURY | STATUS
+        if len(cells) >= 5:
             player_cell = cells[0]
-            status_cell = cells[2]  # Status is usually in 3rd column
+            status_cell = cells[4]  # STATUS is in column index 4
 
             player_link = player_cell.find("a")
             player_name = player_link.get_text(strip=True) if player_link else player_cell.get_text(strip=True)

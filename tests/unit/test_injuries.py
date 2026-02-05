@@ -172,19 +172,24 @@ class TestParseEspnInjuries:
 
     def test_parse_table_format(self):
         """Test parsing ESPN injury table HTML."""
+        # ESPN columns: NAME | POS | EST. RETURN DATE | STATUS | COMMENT
         html = """
         <html>
         <body>
         <table>
             <tr>
-                <td>LeBron James PF</td>
+                <td>LeBron James</td>
+                <td>PF</td>
+                <td>Feb 10</td>
                 <td>Questionable</td>
-                <td>Ankle</td>
+                <td>Ankle soreness</td>
             </tr>
             <tr>
-                <td>Stephen Curry PG</td>
+                <td>Stephen Curry</td>
+                <td>PG</td>
+                <td>Feb 15</td>
                 <td>Out</td>
-                <td>Knee</td>
+                <td>Knee injury</td>
             </tr>
         </table>
         </body>
@@ -214,17 +219,22 @@ class TestParseCbssportsInjuries:
 
     def test_parse_table_format(self):
         """Test parsing CBS Sports injury table HTML."""
+        # CBS columns: NAME | POS | DATE | INJURY | STATUS
         html = """
         <html>
         <body>
         <table>
             <tr class="TableBase-row">
                 <td><a href="/player">Kevin Durant</a></td>
+                <td>SF</td>
+                <td>Feb 10</td>
                 <td>Knee</td>
                 <td>Probable</td>
             </tr>
             <tr class="TableBase-bodyRow">
                 <td><a href="/player">Giannis Antetokounmpo</a></td>
+                <td>PF</td>
+                <td>Feb 12</td>
                 <td>Back</td>
                 <td>Day-To-Day</td>
             </tr>
