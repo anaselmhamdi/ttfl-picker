@@ -307,8 +307,8 @@ def format_recommendations(
         lines.extend([
             "Top Recommendations (risk-adjusted):",
             "",
-            f"{'#':>2}  {'Player':<25} {'Team':<5} {'vs':<5} {'Avg TTFL':>8} {'Adj Score':>9}  Status",
-            "-" * 80,
+            f"{'#':>2}  {'Player':<25} {'Matchup':<12} {'Avg TTFL':>8} {'Adj Score':>9}  Status",
+            "-" * 75,
         ])
 
         for i, rec in enumerate(recommendations, 1):
@@ -318,21 +318,10 @@ def format_recommendations(
             elif rec.trend_direction == "cold":
                 trend_indicator = " v"
 
+            matchup = f"{rec.team} vs {rec.opponent_team}"
             lines.append(
-                f"{i:>2}  {rec.name:<25} {rec.team:<5} {rec.opponent_team:<5} "
+                f"{i:>2}  {rec.name:<25} {matchup:<12} "
                 f"{rec.avg_ttfl:>8.1f} {rec.adjusted_score:>9.1f}{trend_indicator}  {rec.status_display}"
             )
-
-    lines.extend([
-        "",
-        "Legend:",
-        "  ok = Available (no injury)",
-        "  ^  = Hot streak (score boosted)",
-        "  v  = Cold streak (score reduced)",
-        "  Questionable/Doubtful = Injury risk (score adjusted)",
-        "  Locked = Picked in last 30 days",
-        "",
-        "Use --verbose for detailed scoring breakdown.",
-    ])
 
     return "\n".join(lines)

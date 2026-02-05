@@ -348,9 +348,10 @@ class TestFormatRecommendations:
         # Jokic is hot, Doncic is cold
         assert "^" in result or "v" in result
 
-    def test_legend_included(self, sample_recommendations):
-        """Test that legend is included."""
+    def test_matchup_column(self, sample_recommendations):
+        """Test that matchup column format is used."""
         result = format_recommendations(sample_recommendations, "2025-01-25")
 
-        assert "Legend:" in result
-        assert "Hot streak" in result or "hot" in result.lower()
+        # Matchup should be "TEAM vs OPP" format
+        assert "DEN vs LAL" in result
+        assert "Matchup" in result

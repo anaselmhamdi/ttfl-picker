@@ -3,9 +3,8 @@
 import pytest
 
 from src.discord_notify import (
-    _format_compact_pick,
+    _build_picks_embed,
     _format_detailed_pick,
-    _generate_full_rankings_file,
     _get_matchup_emoji,
     _get_risk_emoji,
     _get_trend_emoji,
@@ -71,49 +70,6 @@ class TestGetRiskEmoji:
         assert _get_risk_emoji(0.0) == ""
 
 
-class TestFormatCompactPick:
-    """Tests for _format_compact_pick function."""
-
-    @pytest.fixture
-    def sample_rec(self):
-        """Create a sample recommendation."""
-        return PlayerRecommendation(
-            name="Nikola Jokic",
-            team="DEN",
-            player_id=203999,
-            opponent_team="LAL",
-            avg_ttfl=55.0,
-            weighted_avg=57.5,
-            trend_factor=1.10,
-            trend_direction="hot",
-            consistency_factor=0.98,
-            defense_factor=1.15,
-            best_defender=None,
-            defender_factor=1.0,
-            adjusted_score=62.5,
-            injury_status=None,
-            dnp_risk=0.0,
-            is_locked=False,
-            games_played=10,
-        )
-
-    def test_compact_format_healthy(self, sample_rec):
-        """Test compact format for healthy player."""
-        result = _format_compact_pick(1, sample_rec)
-        assert "Nikola Jokic" in result
-        assert "DEN vs LAL" in result
-        assert "62" in result or "63" in result  # Score rounded
-        assert "🔥" in result  # Hot trend
-        assert "🟢" in result  # Great matchup
-
-    def test_compact_format_with_injury(self, sample_rec):
-        """Test compact format with injury risk."""
-        sample_rec.injury_status = "Questionable"
-        sample_rec.dnp_risk = 0.4
-        result = _format_compact_pick(1, sample_rec)
-        assert "⚠️" in result
-
-
 class TestFormatDetailedPick:
     """Tests for _format_detailed_pick function."""
 
@@ -163,10 +119,11 @@ class TestFormatDetailedPick:
         """Test detailed format with elite defender."""
         sample_rec.best_defender = "Rudy Gobert"
         sample_rec.defender_factor = 0.88
-        sample_rec.defense_factor = 0.90  # Tough defense threshold
+        sample_rec.defense_factor = 0.90
+        # Combined = 0.792, which is < 0.90 = "Very tough defense"
         result = _format_detailed_pick(11, sample_rec)
         assert "Rudy Gobert" in result
-        assert "Tough defense" in result
+        assert "Very tough defense" in result
 
     def test_detailed_format_cold_streak(self, sample_rec):
         """Test detailed format with cold streak."""
@@ -182,14 +139,14 @@ class TestFormatDetailedPick:
         assert "➡️ Stable" in result
 
 
-class TestGenerateFullRankingsFile:
-    """Tests for _generate_full_rankings_file function."""
+class TestBuildPicksEmbed:
+    """Tests for _build_picks_embed function."""
 
     @pytest.fixture
     def sample_recommendations(self):
         """Create sample recommendations list."""
         recs = []
-        for i in range(50):
+        for i in range(25):
             recs.append(PlayerRecommendation(
                 name=f"Player {i+1}",
                 team="TM1" if i % 2 == 0 else "TM2",
@@ -211,33 +168,39 @@ class TestGenerateFullRankingsFile:
             ))
         return recs
 
-    def test_generates_header(self, sample_recommendations):
-        """Test that file has proper header."""
-        result = _generate_full_rankings_file(sample_recommendations, "2025-02-04")
-        assert "TTFL Rankings - 2025-02-04" in result
-        assert "Score" in result
-        assert "Player" in result
-        assert "Team" in result
+    def test_builds_first_embed(self, sample_recommendations):
+        """Test building embed for picks 1-10."""
+        embed = _build_picks_embed(sample_recommendations, 1, 10, "2025-02-04")
+        assert embed is not None
+        assert "TTFL 2025-02-04" in embed.title
+        assert "Picks #1-10" in embed.title
+        # Should have 10 fields (one per pick)
+        assert len(embed.fields) == 10
 
-    def test_contains_all_50_players(self, sample_recommendations):
-        """Test that all 50 players are included."""
-        result = _generate_full_rankings_file(sample_recommendations, "2025-02-04")
-        assert "Player 1" in result
-        assert "Player 50" in result
+    def test_builds_second_embed(self, sample_recommendations):
+        """Test building embed for picks 11-20."""
+        embed = _build_picks_embed(sample_recommendations, 11, 20, "2025-02-04")
+        assert embed is not None
+        assert "Picks #11-20" in embed.title
+        # No date in subsequent messages
+        assert "TTFL" not in embed.title
 
-    def test_contains_legend(self, sample_recommendations):
-        """Test that legend is included."""
-        result = _generate_full_rankings_file(sample_recommendations, "2025-02-04")
-        assert "Legend:" in result
-        assert "[+] Great matchup" in result
+    def test_returns_none_for_empty_range(self, sample_recommendations):
+        """Test returns None when range has no picks."""
+        embed = _build_picks_embed(sample_recommendations, 100, 110, "2025-02-04")
+        assert embed is None
 
-    def test_shows_injury_status(self, sample_recommendations):
-        """Test that injury status is shown."""
-        result = _generate_full_rankings_file(sample_recommendations, "2025-02-04")
-        assert "Questionable" in result
-        assert "40%" in result
+    def test_partial_range(self, sample_recommendations):
+        """Test building embed when fewer picks than requested."""
+        # Only 25 recs, asking for 21-30
+        embed = _build_picks_embed(sample_recommendations, 21, 30, "2025-02-04")
+        assert embed is not None
+        # Should have 5 fields (picks 21-25)
+        assert len(embed.fields) == 5
+        assert "Picks #21-25" in embed.title
 
-    def test_shows_trend(self, sample_recommendations):
-        """Test that trend is shown."""
-        result = _generate_full_rankings_file(sample_recommendations, "2025-02-04")
-        assert "+5%" in result or "stable" in result
+    def test_different_colors(self, sample_recommendations):
+        """Test that different ranges get different colors."""
+        embed1 = _build_picks_embed(sample_recommendations, 1, 10, "2025-02-04")
+        embed2 = _build_picks_embed(sample_recommendations, 11, 20, "2025-02-04")
+        assert embed1.color != embed2.color
