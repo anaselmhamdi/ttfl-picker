@@ -1,17 +1,12 @@
 """Team defense statistics and TTFL defense rating calculation."""
 
-import time
 from dataclasses import dataclass
 
 from nba_api.stats.endpoints import LeagueDashTeamStats
 from nba_api.stats.static import teams
 
 from . import get_current_season
-
-
-# Rate limiting
-def _rate_limit():
-    time.sleep(0.6)
+from .nba_config import nba_api_call
 
 
 # Maximum defense adjustment
@@ -115,15 +110,18 @@ def fetch_team_defense_stats(season: str | None = None) -> dict[int, TeamDefense
     if season is None:
         season = get_current_season()
 
-    _rate_limit()
-
     try:
         # Fetch opponent stats (what defenses allow)
-        team_stats = LeagueDashTeamStats(
+        team_stats = nba_api_call(
+            LeagueDashTeamStats,
+            critical=False,
             season=season,
             measure_type_detailed_defense="Opponent",
             per_mode_detailed="PerGame",
         )
+        if team_stats is None:
+            print("Warning: Could not fetch team defense stats (all retries exhausted)")
+            return {}
         df = team_stats.get_data_frames()[0]
 
         if df.empty:

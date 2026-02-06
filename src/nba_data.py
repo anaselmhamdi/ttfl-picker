@@ -1,6 +1,5 @@
 """Fetch NBA schedule and player stats via nba_api."""
 
-import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -13,16 +12,12 @@ from nba_api.stats.endpoints import (
 from nba_api.stats.static import players, teams
 
 from . import get_current_season
+from .nba_config import nba_api_call
 from .ttfl import calculate_ttfl_from_game_log
 
 # Timezone constants
 TZ_EST = ZoneInfo("America/New_York")
 TZ_PARIS = ZoneInfo("Europe/Paris")
-
-
-# Rate limiting - nba_api can be rate limited
-def _rate_limit():
-    time.sleep(0.6)
 
 
 def get_todays_games(date: str | None = None) -> list[dict]:
@@ -42,8 +37,7 @@ def get_todays_games(date: str | None = None) -> list[dict]:
     date_obj = datetime.strptime(date, "%Y-%m-%d")
     game_date = date_obj.strftime("%m/%d/%Y")
 
-    _rate_limit()
-    scoreboard = ScoreboardV2(game_date=game_date)
+    scoreboard = nba_api_call(ScoreboardV2, critical=True, game_date=game_date)
     games_df = scoreboard.get_data_frames()[0]  # GameHeader
 
     games = []
@@ -111,9 +105,8 @@ def get_players_for_teams(team_ids: list[int]) -> list[dict]:
     all_players = []
 
     for team_id in team_ids:
-        _rate_limit()
         try:
-            roster = CommonTeamRoster(team_id=team_id)
+            roster = nba_api_call(CommonTeamRoster, critical=True, team_id=team_id)
             roster_df = roster.get_data_frames()[0]
 
             for _, row in roster_df.iterrows():
@@ -144,9 +137,10 @@ def get_player_game_logs(player_id: int, season: str | None = None, last_n: int 
     if season is None:
         season = get_current_season()
 
-    _rate_limit()
     try:
-        game_log = PlayerGameLog(player_id=player_id, season=season)
+        game_log = nba_api_call(PlayerGameLog, critical=False, player_id=player_id, season=season)
+        if game_log is None:
+            return []
         df = game_log.get_data_frames()[0]
 
         if df.empty:

@@ -1,17 +1,12 @@
 """Best defender matchup analysis."""
 
-import time
 from dataclasses import dataclass
 
 from nba_api.stats.endpoints import LeagueDashPlayerStats
 from nba_api.stats.static import teams
 
 from . import get_current_season
-
-
-# Rate limiting
-def _rate_limit():
-    time.sleep(0.6)
+from .nba_config import nba_api_call
 
 
 # Defender quality tiers and their factors
@@ -102,15 +97,18 @@ def fetch_defender_stats(season: str | None = None) -> tuple[dict[int, list[Defe
     if season is None:
         season = get_current_season()
 
-    _rate_limit()
-
     try:
         # Fetch player defense stats
-        player_stats = LeagueDashPlayerStats(
+        player_stats = nba_api_call(
+            LeagueDashPlayerStats,
+            critical=False,
             season=season,
             measure_type_detailed_defense="Defense",
             per_mode_detailed="PerGame",
         )
+        if player_stats is None:
+            print("Warning: Could not fetch defender stats (all retries exhausted)")
+            return {}, []
         df = player_stats.get_data_frames()[0]
 
         if df.empty:

@@ -79,12 +79,18 @@ class TTFLSession:
 
         # Defense stats (these cache globally in their modules)
         self._log("Fetching team defense stats...")
-        fetch_team_defense_stats()
-        self._log("  Team defense stats loaded")
+        defense_stats = fetch_team_defense_stats()
+        if defense_stats:
+            self._log(f"  Team defense stats loaded ({len(defense_stats)} teams)")
+        else:
+            self._log("  Warning: Team defense stats unavailable (will use neutral factors)")
 
         self._log("Fetching defender rankings...")
-        fetch_defender_stats()
-        self._log("  Defender rankings loaded")
+        team_defenders, all_defenders = fetch_defender_stats()
+        if all_defenders:
+            self._log(f"  Defender rankings loaded ({len(all_defenders)} players)")
+        else:
+            self._log("  Warning: Defender rankings unavailable (will use neutral factors)")
 
     def get_player_ttfl(self, player_id: int) -> list[float]:
         """Get player TTFL scores with caching."""

@@ -28,4 +28,7 @@ jobs:
       - name: Run TTFL Picker
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          NBA_PROXY: ${{ secrets.NBA_PROXY }}
+          NBA_TIMEOUT: "60"
+          NBA_MAX_RETRIES: "3"
         run: uv run python main.py --ignore-locks --discord
