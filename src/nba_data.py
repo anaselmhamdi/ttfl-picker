@@ -1,5 +1,6 @@
 """Fetch NBA schedule and player stats via nba_api."""
 
+import re
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -49,17 +50,23 @@ def get_todays_games(date: str | None = None) -> list[dict]:
             "game_status": row.get("GAME_STATUS_TEXT", ""),
         }
 
-        # Parse game time from GAME_DATE_EST (format: "2025-02-05T19:00:00")
+        # Parse game time by combining date from GAME_DATE_EST and time from GAME_STATUS_TEXT
+        # GAME_DATE_EST only has the date (midnight), actual time is in GAME_STATUS_TEXT (e.g. "7:00 pm ET")
         game_date_est = row.get("GAME_DATE_EST")
+        game_status_text = str(row.get("GAME_STATUS_TEXT", "")).strip()
+        game_data["game_time_utc"] = None
+
         if game_date_est:
             try:
-                # Parse as naive datetime, then localize to EST
-                game_dt = datetime.strptime(str(game_date_est), "%Y-%m-%dT%H:%M:%S")
-                game_data["game_time_utc"] = game_dt.replace(tzinfo=TZ_EST)
+                base_date = datetime.strptime(str(game_date_est), "%Y-%m-%dT%H:%M:%S")
+                # Try parsing time from GAME_STATUS_TEXT (e.g. "7:00 pm ET", "10:00 pm ET")
+                time_match = re.match(r"(\d{1,2}:\d{2}\s*[ap]m)\s*ET", game_status_text, re.IGNORECASE)
+                if time_match:
+                    time_part = datetime.strptime(time_match.group(1).strip(), "%I:%M %p")
+                    game_dt = base_date.replace(hour=time_part.hour, minute=time_part.minute)
+                    game_data["game_time_utc"] = game_dt.replace(tzinfo=TZ_EST)
             except (ValueError, TypeError):
-                game_data["game_time_utc"] = None
-        else:
-            game_data["game_time_utc"] = None
+                pass
 
         games.append(game_data)
 
