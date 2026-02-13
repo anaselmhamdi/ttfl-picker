@@ -112,7 +112,15 @@ def main(date, top, show_risky, show_locked, ignore_locks, cookies, output, verb
                 _, games = session.get_players_for_date(date)
                 earliest_game_time = get_earliest_game_time(games)
 
-                success = post_to_discord(recommendations, display_date, earliest_game_time=earliest_game_time)
+                # Get notable injuries for the digest
+                notable_injuries = session.get_notable_injuries(date)
+
+                success = post_to_discord(
+                    recommendations,
+                    display_date,
+                    earliest_game_time=earliest_game_time,
+                    notable_injuries=notable_injuries,
+                )
                 if success:
                     click.echo("\nPosted to Discord successfully!")
                 else:

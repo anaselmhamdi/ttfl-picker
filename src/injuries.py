@@ -183,11 +183,32 @@ def get_injury_report() -> dict[str, str]:
 
 def normalize_player_name(name: str) -> str:
     """Normalize player name for matching."""
-    # Remove accents and special characters for matching
+    import re
     import unicodedata
+
+    # Remove accents
     name = unicodedata.normalize("NFD", name)
     name = "".join(c for c in name if unicodedata.category(c) != "Mn")
-    return name.lower().strip()
+    # Strip periods ("Jr." → "Jr", "O.G." → "OG")
+    name = name.replace(".", "")
+    # Remove apostrophes ("De'Aaron" → "DeAaron")
+    name = name.replace("'", "").replace("\u2019", "")
+    # Replace hyphens with spaces ("Gilgeous-Alexander" → "Gilgeous Alexander")
+    name = name.replace("-", " ")
+    # Collapse whitespace and strip
+    name = re.sub(r"\s+", " ", name).strip()
+    return name.lower()
+
+
+_NAME_SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "v"}
+
+
+def _strip_suffix(normalized_name: str) -> str:
+    """Remove name suffixes (Jr, Sr, II, III, IV, V) from a normalized name."""
+    parts = normalized_name.split()
+    if len(parts) > 1 and parts[-1] in _NAME_SUFFIXES:
+        return " ".join(parts[:-1])
+    return normalized_name
 
 
 def match_player_injury(player_name: str, injuries: dict[str, str]) -> str | None:
@@ -201,18 +222,25 @@ def match_player_injury(player_name: str, injuries: dict[str, str]) -> str | Non
     Returns:
         Injury status or None if not found
     """
-    # Exact match
+    # Tier 1: Exact match
     if player_name in injuries:
         return injuries[player_name]
 
-    # Normalized match
+    # Tier 2: Normalized match (accents, periods, hyphens, case)
     normalized = normalize_player_name(player_name)
 
     for inj_player, status in injuries.items():
         if normalize_player_name(inj_player) == normalized:
             return status
 
-    # Partial match (for names like "LeBron James" vs "James, LeBron")
+    # Tier 3: Suffix-stripped match (Jr/Sr/II/III/IV removed)
+    stripped = _strip_suffix(normalized)
+    for inj_player, status in injuries.items():
+        inj_stripped = _strip_suffix(normalize_player_name(inj_player))
+        if stripped == inj_stripped:
+            return status
+
+    # Tier 4: Partial match (for names like "LeBron James" vs "James, LeBron")
     player_parts = set(normalized.split())
     for inj_player, status in injuries.items():
         inj_parts = set(normalize_player_name(inj_player).split())

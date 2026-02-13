@@ -13,6 +13,17 @@ from .ttfl_client import get_locked_players
 
 
 @dataclass
+class InjuredPlayer:
+    """A notable injured player for tonight's games."""
+
+    name: str
+    team: str
+    opponent_team: str
+    injury_status: str
+    dnp_risk: float
+
+
+@dataclass
 class DayPlan:
     """Recommended pick for a single day."""
 
@@ -107,6 +118,39 @@ class TTFLSession:
             self._players_cache[date] = get_players_playing_tonight(date)
 
         return self._players_cache[date]
+
+    def get_notable_injuries(self, date: str | None = None) -> list[InjuredPlayer]:
+        """Get notable injuries (OUT/Doubtful) for tonight's games.
+
+        Reuses cached player and injury data — no additional HTTP calls.
+
+        Returns:
+            Players with dnp_risk >= 0.75, sorted: OUT first, then Doubtful, then alphabetical.
+        """
+        players, _ = self.get_players_for_date(date)
+
+        notable = []
+        for player in players:
+            player_name = player["name"]
+            team = player["team"]
+            opponent_team_id = player.get("opponent_team_id")
+            opponent_team = get_team_abbrev(opponent_team_id) if opponent_team_id else "?"
+
+            injury_status = match_player_injury(player_name, self._injuries)
+            dnp_risk = get_dnp_risk(injury_status)
+
+            if dnp_risk >= 0.75:
+                notable.append(InjuredPlayer(
+                    name=player_name,
+                    team=team,
+                    opponent_team=opponent_team,
+                    injury_status=injury_status,
+                    dnp_risk=dnp_risk,
+                ))
+
+        # Sort: OUT (1.0) first, then Doubtful (0.75), then alphabetical
+        notable.sort(key=lambda p: (-p.dnp_risk, p.name))
+        return notable
 
     def get_recommendations(
         self,

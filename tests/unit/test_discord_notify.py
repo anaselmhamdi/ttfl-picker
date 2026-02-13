@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from src.discord_notify import (
+    _build_injuries_embed,
     _build_picks_embed,
     _format_detailed_pick,
     _get_matchup_emoji,
@@ -13,6 +14,7 @@ from src.discord_notify import (
     _get_trend_emoji,
 )
 from src.picker import PlayerRecommendation
+from src.session import InjuredPlayer
 
 
 class TestGetMatchupEmoji:
@@ -100,7 +102,7 @@ class TestFormatDetailedPick:
         )
 
     def test_detailed_format_healthy(self, sample_rec):
-        """Test detailed format for healthy player."""
+        """Test detailed format for healthy player (no status line)."""
         result = _format_detailed_pick(11, sample_rec)
         assert "De'Aaron Fox" in result
         assert "SAC vs UTA" in result
@@ -108,7 +110,8 @@ class TestFormatDetailedPick:
         assert "38.0" in result  # Avg
         assert "🔥" in result  # Hot trend
         assert "Weak defense" in result  # Defense factor > 1.08
-        assert "✅ Healthy" in result
+        assert "Healthy" not in result
+        assert "✅" not in result
 
     def test_detailed_format_with_injury(self, sample_rec):
         """Test detailed format with injury."""
@@ -234,3 +237,49 @@ class TestBuildPicksEmbed:
         assert embed is not None
         # Second embed should not have the description even if game_time is passed
         assert embed.description is None
+
+
+class TestBuildInjuriesEmbed:
+    """Tests for _build_injuries_embed function."""
+
+    def test_returns_none_for_empty(self):
+        """Test returns None when no injuries."""
+        result = _build_injuries_embed([], "2025-02-04")
+        assert result is None
+
+    def test_builds_embed_with_out_and_doubtful(self):
+        """Test embed with both OUT and Doubtful players."""
+        injuries = [
+            InjuredPlayer("Stephen Curry", "GSW", "LAL", "Out", 1.0),
+            InjuredPlayer("LeBron James", "LAL", "GSW", "Out", 1.0),
+            InjuredPlayer("Luka Doncic", "DAL", "PHX", "Doubtful", 0.75),
+        ]
+        embed = _build_injuries_embed(injuries, "2025-02-04")
+        assert embed is not None
+        assert "Notable Injuries" in embed.title
+        assert "2025-02-04" in embed.title
+        assert len(embed.fields) == 2
+        assert "Out (2)" in embed.fields[0]["name"]
+        assert "Doubtful (1)" in embed.fields[1]["name"]
+
+    def test_builds_embed_out_only(self):
+        """Test embed with only OUT players."""
+        injuries = [
+            InjuredPlayer("Stephen Curry", "GSW", "LAL", "Out", 1.0),
+        ]
+        embed = _build_injuries_embed(injuries, "2025-02-04")
+        assert embed is not None
+        assert len(embed.fields) == 1
+        assert "Out (1)" in embed.fields[0]["name"]
+        assert "Stephen Curry" in embed.fields[0]["value"]
+        assert "GSW vs LAL" in embed.fields[0]["value"]
+
+    def test_builds_embed_doubtful_only(self):
+        """Test embed with only Doubtful players."""
+        injuries = [
+            InjuredPlayer("Luka Doncic", "DAL", "PHX", "Doubtful", 0.75),
+        ]
+        embed = _build_injuries_embed(injuries, "2025-02-04")
+        assert embed is not None
+        assert len(embed.fields) == 1
+        assert "Doubtful (1)" in embed.fields[0]["name"]

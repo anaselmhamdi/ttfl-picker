@@ -3,6 +3,7 @@
 import pytest
 
 from src.injuries import (
+    _strip_suffix,
     get_dnp_risk,
     get_injury_status_display,
     match_player_injury,
@@ -110,7 +111,7 @@ class TestNormalizePlayerName:
 
     def test_whitespace(self):
         """Test whitespace handling."""
-        assert normalize_player_name("  LeBron  James  ") == "lebron  james"
+        assert normalize_player_name("  LeBron  James  ") == "lebron james"
 
     def test_case_insensitive(self):
         """Test case is lowered."""
@@ -119,7 +120,48 @@ class TestNormalizePlayerName:
 
     def test_special_characters(self):
         """Test handling of special characters."""
-        assert normalize_player_name("O.G. Anunoby") == "o.g. anunoby"
+        assert normalize_player_name("O.G. Anunoby") == "og anunoby"
+
+    def test_periods_stripped(self):
+        """Test periods are removed."""
+        assert normalize_player_name("Jr.") == "jr"
+        assert normalize_player_name("P.J. Washington") == "pj washington"
+
+    def test_hyphens_to_spaces(self):
+        """Test hyphens are replaced with spaces."""
+        assert normalize_player_name("Shai Gilgeous-Alexander") == "shai gilgeous alexander"
+        assert normalize_player_name("Day-To-Day") == "day to day"
+
+    def test_apostrophes_stripped(self):
+        """Test apostrophes are removed."""
+        assert normalize_player_name("De'Aaron Fox") == "deaaron fox"
+        assert normalize_player_name("De\u2019Aaron Fox") == "deaaron fox"
+
+
+class TestStripSuffix:
+    """Tests for _strip_suffix helper."""
+
+    def test_strips_jr(self):
+        assert _strip_suffix("jaren jackson jr") == "jaren jackson"
+
+    def test_strips_sr(self):
+        assert _strip_suffix("gary payton sr") == "gary payton"
+
+    def test_strips_iii(self):
+        assert _strip_suffix("robert williams iii") == "robert williams"
+
+    def test_strips_ii(self):
+        assert _strip_suffix("lonnie walker ii") == "lonnie walker"
+
+    def test_strips_iv(self):
+        assert _strip_suffix("marcus bagley iv") == "marcus bagley"
+
+    def test_no_suffix(self):
+        assert _strip_suffix("lebron james") == "lebron james"
+
+    def test_single_word_suffix(self):
+        """Single-word name that IS a suffix should not be stripped."""
+        assert _strip_suffix("jr") == "jr"
 
 
 class TestMatchPlayerInjury:
@@ -165,6 +207,30 @@ class TestMatchPlayerInjury:
         # With only 1 part, partial matching requires len(player_parts) to be >= 2
         # min(2, len(player_parts)) = min(2, 1) = 1, so it should match
         assert result == "Out"
+
+    def test_suffix_mismatch(self):
+        """Test matching when one source has suffix and other doesn't."""
+        injuries = {"Jaren Jackson Jr.": "Out"}
+        result = match_player_injury("Jaren Jackson", injuries)
+        assert result == "Out"
+
+    def test_suffix_mismatch_reverse(self):
+        """Test matching when player has suffix but injury report doesn't."""
+        injuries = {"Jaren Jackson": "Out"}
+        result = match_player_injury("Jaren Jackson Jr.", injuries)
+        assert result == "Out"
+
+    def test_period_mismatch(self):
+        """Test matching O.G. vs OG."""
+        injuries = {"O.G. Anunoby": "Questionable"}
+        result = match_player_injury("OG Anunoby", injuries)
+        assert result == "Questionable"
+
+    def test_hyphen_mismatch(self):
+        """Test matching hyphenated vs non-hyphenated names."""
+        injuries = {"Shai Gilgeous-Alexander": "Day-To-Day"}
+        result = match_player_injury("Shai Gilgeous Alexander", injuries)
+        assert result == "Day-To-Day"
 
 
 class TestParseEspnInjuries:

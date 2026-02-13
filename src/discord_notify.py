@@ -6,6 +6,7 @@ from datetime import datetime
 from discord_webhook import DiscordEmbed, DiscordWebhook
 
 from .picker import PlayerRecommendation
+from .session import InjuredPlayer
 
 
 def _get_trend_emoji(direction: str) -> str:
@@ -60,15 +61,15 @@ def _format_detailed_pick(rank: int, rec: PlayerRecommendation) -> str:
     if rec.best_defender and rec.defender_factor < 0.95:
         matchup_text += f" (vs {rec.best_defender})"
 
-    # Build status text
+    # Build status text (only show if injured)
     if rec.dnp_risk >= 1.0:
-        status = "🚫 OUT"
+        status = "\n🚫 OUT"
     elif rec.dnp_risk >= 0.5:
-        status = f"⛔ {rec.injury_status} ({int(rec.dnp_risk*100)}%)"
+        status = f"\n⛔ {rec.injury_status} ({int(rec.dnp_risk*100)}%)"
     elif rec.dnp_risk > 0:
-        status = f"⚠️ {rec.injury_status} ({int(rec.dnp_risk*100)}%)"
+        status = f"\n⚠️ {rec.injury_status} ({int(rec.dnp_risk*100)}%)"
     else:
-        status = "✅ Healthy"
+        status = ""
 
     # Build trend text
     if rec.trend_direction == "hot":
@@ -81,7 +82,7 @@ def _format_detailed_pick(rank: int, rec: PlayerRecommendation) -> str:
     return (
         f"**#{rank} {rec.name}** ({rec.team} vs {rec.opponent_team})\n"
         f"Score: **{rec.adjusted_score:.1f}** | Avg: {rec.avg_ttfl:.1f} | {trend_text}\n"
-        f"{matchup_text}\n"
+        f"{matchup_text}"
         f"{status}"
     )
 
@@ -141,26 +142,63 @@ def _build_picks_embed(
     return embed
 
 
+def _build_injuries_embed(
+    injuries: list[InjuredPlayer],
+    date: str,
+) -> DiscordEmbed | None:
+    """Build embed for notable injuries (OUT/Doubtful).
+
+    Returns:
+        DiscordEmbed or None if no notable injuries.
+    """
+    if not injuries:
+        return None
+
+    out_players = [p for p in injuries if p.dnp_risk >= 1.0]
+    doubtful_players = [p for p in injuries if 0.75 <= p.dnp_risk < 1.0]
+
+    embed = DiscordEmbed(
+        title=f"\U0001f3e5 Notable Injuries - {date}",
+        color="e74c3c",
+    )
+
+    if out_players:
+        lines = [f"\U0001f6ab **{p.name}** ({p.team} vs {p.opponent_team})" for p in out_players]
+        embed.add_embed_field(
+            name=f"Out ({len(out_players)})",
+            value="\n".join(lines),
+            inline=False,
+        )
+
+    if doubtful_players:
+        lines = [f"\u26a0\ufe0f **{p.name}** ({p.team} vs {p.opponent_team})" for p in doubtful_players]
+        embed.add_embed_field(
+            name=f"Doubtful ({len(doubtful_players)})",
+            value="\n".join(lines),
+            inline=False,
+        )
+
+    return embed
+
+
 def post_to_discord(
     recommendations: list[PlayerRecommendation],
     date: str,
     webhook_url: str | None = None,
     earliest_game_time: datetime | None = None,
+    notable_injuries: list[InjuredPlayer] | None = None,
 ) -> bool:
     """Post recommendations to Discord with multiple messages.
 
-    Sends separate messages with 10 picks each (up to 50 total):
-    - Message 1: Picks 1-10
-    - Message 2: Picks 11-20
-    - Message 3: Picks 21-30
-    - Message 4: Picks 31-40
-    - Message 5: Picks 41-50
+    Sends separate messages with 10 picks each (up to 50 total),
+    followed by a notable injuries embed if available.
 
     Args:
         recommendations: List of player recommendations
         date: Date string (YYYY-MM-DD)
         webhook_url: Optional webhook URL (defaults to DISCORD_WEBHOOK_URL env var)
         earliest_game_time: Earliest game time in Paris timezone (shown in first embed)
+        notable_injuries: Optional list of notable injured players (OUT/Doubtful)
 
     Returns:
         True if posting succeeded, False otherwise
@@ -199,5 +237,15 @@ def post_to_discord(
         response = webhook.execute()
         if response.status_code != 200:
             success = False
+
+    # Send injuries embed as final message
+    if notable_injuries:
+        injuries_embed = _build_injuries_embed(notable_injuries, date)
+        if injuries_embed:
+            webhook = DiscordWebhook(url=url, username="TTFL Picker", rate_limit_retry=True)
+            webhook.add_embed(injuries_embed)
+            response = webhook.execute()
+            if response.status_code != 200:
+                success = False
 
     return success
