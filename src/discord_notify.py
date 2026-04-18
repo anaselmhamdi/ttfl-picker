@@ -6,6 +6,7 @@ from datetime import datetime
 from discord_webhook import DiscordEmbed, DiscordWebhook
 
 from .picker import PlayerRecommendation
+from .playoffs import tier_emoji
 from .session import InjuredPlayer
 
 
@@ -79,10 +80,23 @@ def _format_detailed_pick(rank: int, rec: PlayerRecommendation) -> str:
     else:
         trend_text = "➡️ Stable"
 
+    # Playoff line (only when rec.seed is populated)
+    playoff_line = ""
+    if rec.seed is not None:
+        tier = rec.elimination_tier or ""
+        emoji = tier_emoji(tier)
+        odds_str = f"+{rec.championship_odds}" if rec.championship_odds and rec.championship_odds > 0 else str(rec.championship_odds)
+        urgency = f"×{rec.scarcity_factor:.2f}" if rec.scarcity_factor else ""
+        games_str = ""
+        if rec.expected_remaining_games is not None:
+            games_str = f" · ~{rec.expected_remaining_games:.1f} games left"
+        playoff_line = f"\n{emoji} #{rec.seed} seed · {tier} (odds {odds_str}){games_str} · urgency {urgency}"
+
     return (
         f"**#{rank} {rec.name}** ({rec.team} vs {rec.opponent_team})\n"
         f"Score: **{rec.adjusted_score:.1f}** | Avg: {rec.avg_ttfl:.1f} | {trend_text}\n"
         f"{matchup_text}"
+        f"{playoff_line}"
         f"{status}"
     )
 
@@ -112,9 +126,11 @@ def _build_picks_embed(
     if not picks:
         return None
 
-    # Title varies based on range
+    # Title varies based on range and mode
+    is_playoffs = picks[0].seed is not None
     if start_rank == 1:
-        title = f"🏀 TTFL {date} - Picks #{start_rank}-{start_rank + len(picks) - 1}"
+        prefix = "🏆 TTFL Playoffs" if is_playoffs else "🏀 TTFL"
+        title = f"{prefix} {date} - Picks #{start_rank}-{start_rank + len(picks) - 1}"
     else:
         title = f"🏀 Picks #{start_rank}-{start_rank + len(picks) - 1}"
 
@@ -125,9 +141,15 @@ def _build_picks_embed(
 
     # Add deadline description for first embed only
     description = None
-    if start_rank == 1 and earliest_game_time:
-        time_str = earliest_game_time.strftime("%Hh%M")
-        description = f"⏰ Picks close at **{time_str}** (Paris time)"
+    if start_rank == 1:
+        parts = []
+        if earliest_game_time:
+            time_str = earliest_game_time.strftime("%Hh%M")
+            parts.append(f"⏰ Picks close at **{time_str}** (Paris time)")
+        if is_playoffs:
+            parts.append("🪦 Scarcity-weighted: early-out teams boosted so you grab them before they're eliminated")
+        if parts:
+            description = "\n".join(parts)
 
     embed = DiscordEmbed(title=title, description=description, color=color)
 

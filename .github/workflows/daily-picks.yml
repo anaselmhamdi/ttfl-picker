@@ -31,4 +31,4 @@ jobs:
           NBA_PROXY: ${{ secrets.NBA_PROXY }}
           NBA_TIMEOUT: "60"
           NBA_MAX_RETRIES: "3"
-        run: uv run python main.py --ignore-locks --discord
+        run: uv run python main.py --ignore-locks --discord --playoffs

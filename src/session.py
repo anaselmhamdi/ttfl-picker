@@ -9,6 +9,14 @@ from .injuries import get_dnp_risk, get_injury_report, match_player_injury
 from .matchups import fetch_defender_stats, get_defender_factor
 from .nba_data import get_player_ttfl_scores, get_players_playing_tonight, get_team_abbrev
 from .picker import PlayerRecommendation, calculate_final_score
+from .playoffs import (
+    elimination_tier,
+    expected_remaining_games,
+    get_team_info,
+    is_playoff_team,
+    playoff_team_ids,
+    scarcity_factor,
+)
 from .ttfl_client import get_locked_players
 
 
@@ -45,6 +53,7 @@ class TTFLSession:
         cookie_file: str = "fantasy.trashtalk.co_cookies.txt",
         ignore_locks: bool = False,
         verbose: bool = True,
+        playoff_mode: bool = False,
     ):
         """
         Initialize session and fetch all shared data.
@@ -53,10 +62,13 @@ class TTFLSession:
             cookie_file: Path to TTFL cookie file
             ignore_locks: Skip fetching locked players
             verbose: Print progress messages
+            playoff_mode: Restrict to 16 playoff teams and apply scarcity weighting
         """
         self.cookie_file = cookie_file
         self.ignore_locks = ignore_locks
         self.verbose = verbose
+        self.playoff_mode = playoff_mode
+        self._playoff_team_ids = playoff_team_ids() if playoff_mode else set()
 
         # Caches
         self._locked_players: set[str] = set()
@@ -115,7 +127,15 @@ class TTFLSession:
             date = datetime.now().strftime("%Y-%m-%d")
 
         if date not in self._players_cache:
-            self._players_cache[date] = get_players_playing_tonight(date)
+            players, games = get_players_playing_tonight(date)
+            if self.playoff_mode and self._playoff_team_ids:
+                players = [p for p in players if p.get("team_id") in self._playoff_team_ids]
+                games = [
+                    g for g in games
+                    if g.get("home_team_id") in self._playoff_team_ids
+                    or g.get("away_team_id") in self._playoff_team_ids
+                ]
+            self._players_cache[date] = (players, games)
 
         return self._players_cache[date]
 
@@ -245,6 +265,21 @@ class TTFLSession:
                 defender_factor = 1.0
                 best_defender = None
 
+            # Playoff scarcity factor (1.0 when not in playoff mode)
+            if self.playoff_mode and is_playoff_team(team):
+                player_scarcity = scarcity_factor(team)
+                playoff_info = get_team_info(team)
+                seed = playoff_info.seed if playoff_info else None
+                champ_odds = playoff_info.championship_odds if playoff_info else None
+                tier = elimination_tier(team)
+                expected_games = expected_remaining_games(team)
+            else:
+                player_scarcity = 1.0
+                seed = None
+                champ_odds = None
+                tier = None
+                expected_games = None
+
             # Calculate final score
             adjusted_score = calculate_final_score(
                 form_analysis=form_analysis,
@@ -253,6 +288,7 @@ class TTFLSession:
                 dnp_risk=dnp_risk,
                 use_form=use_form,
                 use_defense=use_defense,
+                scarcity_factor=player_scarcity,
             )
 
             rec = PlayerRecommendation(
@@ -273,6 +309,11 @@ class TTFLSession:
                 dnp_risk=dnp_risk,
                 is_locked=is_locked,
                 games_played=len(ttfl_scores),
+                seed=seed,
+                championship_odds=champ_odds,
+                scarcity_factor=player_scarcity,
+                elimination_tier=tier,
+                expected_remaining_games=expected_games,
             )
             recommendations.append(rec)
 

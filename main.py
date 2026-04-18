@@ -27,7 +27,8 @@ from src.session import TTFLSession, format_plan
 @click.option("--no-form", is_flag=True, help="Use simple average instead of form analysis")
 @click.option("--discord", is_flag=True, help="Post results to Discord webhook (requires .env)")
 @click.option("--plan", "-p", default=0, help="Plan picks for next N days (e.g., --plan 7)")
-def main(date, top, show_risky, show_locked, ignore_locks, cookies, output, verbose, no_defense, no_form, discord, plan):
+@click.option("--playoffs", is_flag=True, help="Playoff mode: filter to 16 playoff teams, boost likely early-out teams")
+def main(date, top, show_risky, show_locked, ignore_locks, cookies, output, verbose, no_defense, no_form, discord, plan, playoffs):
     """Get daily TTFL pick recommendations."""
     cookie_path = Path(cookies)
 
@@ -54,7 +55,11 @@ def main(date, top, show_risky, show_locked, ignore_locks, cookies, output, verb
             cookie_file=str(cookie_path),
             ignore_locks=ignore_locks,
             verbose=True,
+            playoff_mode=playoffs,
         )
+
+        if playoffs:
+            click.echo("🏆 Playoff mode: restricting to 16 playoff teams, applying scarcity weighting")
 
         # Multi-day planning mode
         if plan > 0:

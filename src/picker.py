@@ -42,6 +42,13 @@ class PlayerRecommendation:
     is_locked: bool
     games_played: int = 10
 
+    # Playoff mode (populated only when --playoffs is active)
+    seed: int | None = None
+    championship_odds: int | None = None
+    scarcity_factor: float = 1.0
+    elimination_tier: str | None = None
+    expected_remaining_games: float | None = None
+
     @property
     def status_display(self) -> str:
         if self.is_locked:
@@ -70,6 +77,7 @@ def calculate_final_score(
     dnp_risk: float,
     use_form: bool = True,
     use_defense: bool = True,
+    scarcity_factor: float = 1.0,
 ) -> float:
     """
     Calculate the final risk-adjusted score.
@@ -78,7 +86,10 @@ def calculate_final_score(
     form_score = weighted_avg * trend_factor * consistency_factor
     defense_adjusted = form_score * defense_factor
     matchup_adjusted = defense_adjusted * defender_factor
-    final_score = matchup_adjusted * (1 - dnp_risk)
+    final_score = matchup_adjusted * (1 - dnp_risk) * scarcity_factor
+
+    scarcity_factor defaults to 1.0 (no effect). In playoff mode it boosts
+    players on teams likely to be eliminated soon.
     """
     if use_form:
         form_score = calculate_form_score(form_analysis)
@@ -91,7 +102,7 @@ def calculate_final_score(
     else:
         matchup_adjusted = form_score
 
-    final_score = matchup_adjusted * (1 - dnp_risk)
+    final_score = matchup_adjusted * (1 - dnp_risk) * scarcity_factor
 
     return final_score
 
