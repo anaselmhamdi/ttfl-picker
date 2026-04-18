@@ -19,30 +19,32 @@ class PlayoffTeamInfo:
     conference: str  # "E" or "W"
     seed: int
     opponent: str  # tricode of current-series opponent
-    championship_odds: int  # American odds
+    championship_odds: int  # American odds to win the NBA title
+    series_odds: int  # American odds to win the CURRENT series
 
 
 CURRENT_ROUND = 1
 
 PLAYOFF_TEAMS: dict[str, PlayoffTeamInfo] = {
     # West
-    "OKC": PlayoffTeamInfo("W", 1, "PHX", -110),
-    "PHX": PlayoffTeamInfo("W", 8, "OKC", +75000),
-    "SAS": PlayoffTeamInfo("W", 2, "POR", +600),
-    "POR": PlayoffTeamInfo("W", 7, "SAS", +75000),
-    "DEN": PlayoffTeamInfo("W", 3, "MIN", +1300),
-    "MIN": PlayoffTeamInfo("W", 6, "DEN", +10000),
-    "LAL": PlayoffTeamInfo("W", 4, "HOU", +22500),
-    "HOU": PlayoffTeamInfo("W", 5, "LAL", +7500),
+    "OKC": PlayoffTeamInfo("W", 1, "PHX", -110, -3000),
+    "PHX": PlayoffTeamInfo("W", 8, "OKC", +75000, +1300),
+    "SAS": PlayoffTeamInfo("W", 2, "POR", +600, -2000),
+    "POR": PlayoffTeamInfo("W", 7, "SAS", +75000, +1000),
+    "DEN": PlayoffTeamInfo("W", 3, "MIN", +1300, -350),
+    "MIN": PlayoffTeamInfo("W", 6, "DEN", +10000, +280),
+    # Rockets are favored over the Lakers (Luka + Reaves injured)
+    "LAL": PlayoffTeamInfo("W", 4, "HOU", +22500, +400),
+    "HOU": PlayoffTeamInfo("W", 5, "LAL", +7500, -575),
     # East
-    "DET": PlayoffTeamInfo("E", 1, "ORL", +1600),
-    "ORL": PlayoffTeamInfo("E", 8, "DET", +70000),
-    "BOS": PlayoffTeamInfo("E", 2, "PHI", +600),
-    "PHI": PlayoffTeamInfo("E", 7, "BOS", +25000),
-    "NYK": PlayoffTeamInfo("E", 3, "ATL", +2200),
-    "ATL": PlayoffTeamInfo("E", 6, "NYK", +12500),
-    "CLE": PlayoffTeamInfo("E", 4, "TOR", +1300),
-    "TOR": PlayoffTeamInfo("E", 5, "CLE", +25000),
+    "DET": PlayoffTeamInfo("E", 1, "ORL", +1600, -500),
+    "ORL": PlayoffTeamInfo("E", 8, "DET", +70000, +380),
+    "BOS": PlayoffTeamInfo("E", 2, "PHI", +600, -900),
+    "PHI": PlayoffTeamInfo("E", 7, "BOS", +25000, +600),
+    "NYK": PlayoffTeamInfo("E", 3, "ATL", +2200, -275),
+    "ATL": PlayoffTeamInfo("E", 6, "NYK", +12500, +220),
+    "CLE": PlayoffTeamInfo("E", 4, "TOR", +1300, -550),
+    "TOR": PlayoffTeamInfo("E", 5, "CLE", +25000, +400),
 }
 
 
@@ -53,21 +55,48 @@ def american_to_prob(odds: int) -> float:
     return 100 / (odds + 100)
 
 
-def _per_round_win_prob(tricode: str) -> float:
-    """Implied per-round win probability, assuming uniform round-by-round skill."""
+def _current_round_win_prob(tricode: str) -> float:
+    """Win probability of the current series, taken directly from series odds."""
     info = PLAYOFF_TEAMS[tricode]
-    rounds = ROUNDS_REMAINING_FROM[CURRENT_ROUND]
+    return max(american_to_prob(info.series_odds), 1e-6)
+
+
+def _later_round_win_prob(tricode: str) -> float:
+    """Uniform per-round win prob for rounds AFTER the current one.
+
+    Derived residually: p_champ = p_current * q^(rounds_left - 1), solve for q.
+    Clamped to [1e-6, 1] to keep the geometric series well-defined.
+    """
+    info = PLAYOFF_TEAMS[tricode]
+    rounds_left = ROUNDS_REMAINING_FROM[CURRENT_ROUND]
+    if rounds_left <= 1:
+        return 0.0
     p_champ = max(american_to_prob(info.championship_odds), 1e-6)
-    return p_champ ** (1 / rounds)
+    p_current = _current_round_win_prob(tricode)
+    residual = p_champ / p_current
+    # If series odds and championship odds disagree heavily, clamp.
+    residual = min(max(residual, 1e-6), 1.0)
+    return residual ** (1 / (rounds_left - 1))
 
 
 def expected_remaining_games(tricode: str) -> float:
-    """Expected number of playoff games this team will play from CURRENT_ROUND onward."""
+    """Expected number of playoff games this team will play from CURRENT_ROUND onward.
+
+    Uses series odds for the current round (sharper) and residual championship
+    odds for future rounds.
+    """
     if tricode not in PLAYOFF_TEAMS:
         return 0.0
-    p = _per_round_win_prob(tricode)
+    p_current = _current_round_win_prob(tricode)
+    q = _later_round_win_prob(tricode)
     rounds_left = ROUNDS_REMAINING_FROM[CURRENT_ROUND]
-    series = sum(p**i for i in range(rounds_left))
+    # Series played = 1 (current) + p_current*1 + p_current*q + p_current*q^2 + ...
+    series = 1.0
+    if rounds_left > 1:
+        advancement = p_current
+        for i in range(rounds_left - 1):
+            series += advancement
+            advancement *= q
     return AVG_SERIES_GAMES * series
 
 

@@ -61,6 +61,17 @@ class TestScarcityFactor:
     def test_unknown_team_returns_zero(self):
         assert scarcity_factor("GSW") == 0.0
 
+    def test_lal_beats_hou_despite_higher_seed(self):
+        # LAL is seed #4 vs HOU seed #5 but series odds make HOU favored
+        # (Luka + Reaves injured). Scarcity should reflect LAL > HOU.
+        assert scarcity_factor("LAL") > scarcity_factor("HOU")
+
+    def test_series_odds_shift_scarcity(self):
+        # Expected games uses current-series odds directly for round 1,
+        # so a team with a tight matchup gets less scarcity than a clear underdog.
+        # ATL (+220) should have less scarcity than PHX (+1300).
+        assert scarcity_factor("ATL") < scarcity_factor("PHX")
+
 
 class TestTeamFilters:
     def test_is_playoff_team_true(self):

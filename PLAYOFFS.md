@@ -39,16 +39,16 @@ Portland Trail Blazers
 Phoenix Suns
 +75000
 
-# Matchups
+# First-round matchups + series odds
 
 East first round
-No. 1 Pistons vs. No. 8 Magic
-No. 2 Celtics vs. No. 7 76ers
-No. 3 Knicks vs. No. 6 Hawks
-No. 4 Cavaliers vs. No. 5 Raptors
+No. 1 Pistons (-500) vs. No. 8 Magic (+380)
+No. 2 Celtics (-900) vs. No. 7 76ers (+600)
+No. 3 Knicks (-275) vs. No. 6 Hawks (+220)
+No. 4 Cavaliers (-550) vs. No. 5 Raptors (+400)
 
 West first round
-No. 1 Thunder vs. No. 8 Suns
-No. 2 Spurs vs. No. 7 Trail Blazers
-No. 3 Nuggets vs. No. 6 Timberwolves
-No. 4 Lakers vs. No. 5 Rockets
+No. 1 Thunder (-3000) vs. No. 8 Suns (+1300)
+No. 2 Spurs (-2000) vs. No. 7 Trail Blazers (+1000)
+No. 3 Nuggets (-350) vs. No. 6 Timberwolves (+280)
+No. 4 Lakers (+400) vs. No. 5 Rockets (-575)   # Rockets favored: Luka + Reaves injured
